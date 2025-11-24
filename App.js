@@ -1,13 +1,15 @@
 
 import { useState, useEffect } from 'react';
-import { Text, View, StyleSheet } from 'react-native';
+import { Text, View, StyleSheet, Button } from 'react-native';
 import { 
   Accuracy,
   requestForegroundPermissionsAsync,
   watchPositionAsync 
 } from 'expo-location';
 
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
+
+import { GOOGLE_API_KEY } from './Secrets';
 
 export default function App() {
 
@@ -22,6 +24,32 @@ export default function App() {
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [mapRegion, setMapRegion] = useState(initRegion);
 
+  const [places, setPlaces] = useState([]);
+
+  const searchLocations = async () => {
+    const params = new URLSearchParams({
+      location: `${location.coords.latitude},${location.coords.longitude}`,
+      type: 'restaurant',
+      radius: '5000', // 5KM
+      key: GOOGLE_API_KEY
+    });
+
+    const placesURI = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`
+    console.log('sending fetch to', placesURI);
+    const response = await fetch(placesURI);
+    const results = await response.json();
+    const newPlaces = [];
+    for (let r of results.results) {
+      const newPlace = {};
+      newPlace.latitude = r.geometry.location.lat;
+      newPlace.longitude = r.geometry.location.lng;
+      newPlace.name = r.name;
+      newPlace.id = r.place_id;
+      console.log("adding place", newPlace);
+      newPlaces.push(newPlace);
+    }
+    setPlaces(newPlaces);
+  }
   let unsubscribeFromLocation = null;
 
   const subscribeToLocation = async () => {
@@ -37,7 +65,6 @@ export default function App() {
       distanceInterval: 1, // 1 meter
       timeInterval: 1000 // 1000ms = 1s
     }, location => {
-      console.log('received update:', location);
       setLocation(location);
       setMapRegion({
         ...mapRegion,
@@ -70,7 +97,24 @@ export default function App() {
         provider={PROVIDER_GOOGLE} 
         region={mapRegion}  
         showsUserLocation={true}
-      /> 
+      >
+        {places.map(place => {
+          return (
+            <Marker
+              key={place.id}
+              coordinate={{
+                latitude: place.latitude,
+                longitude: place.longitude
+              }}
+              title={place.name}
+            />
+          )
+        })}
+      </MapView> 
+      <Button
+        title='Search for Restaurants'
+        onPress={searchLocations}
+        />
      </View>
   );
 }
